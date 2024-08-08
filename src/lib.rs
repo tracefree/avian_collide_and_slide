@@ -11,6 +11,11 @@ pub struct CollideAndSlideConfig {
     pub max_clip_planes: usize,
 }
 
+pub struct CollideAndSlideResult {
+    pub slide_target: Vec3,
+    pub obstacle_hit: bool,
+}
+
 pub fn collide_and_slide(
     origin: Vec3,
     motion: Vec3,
@@ -18,13 +23,16 @@ pub fn collide_and_slide(
     config: &CollideAndSlideConfig,
     spatial_query: &SpatialQuery,
     filter: &SpatialQueryFilter,
-) -> Vec3 {
+) -> CollideAndSlideResult {
     let mut direction_result = Dir3::new(motion);
     let mut distance = motion.length();
     let original_velocity = motion;
 
     let Ok(start_direction) = direction_result else {
-        return Vec3::ZERO;
+        return CollideAndSlideResult {
+            slide_target: Vec3::ZERO,
+            obstacle_hit: false,
+        };
     };
 
     let mut bounce_count = 0;
@@ -113,5 +121,30 @@ pub fn collide_and_slide(
         }
     }
 
-    slide_target
+    return CollideAndSlideResult {
+        slide_target,
+        obstacle_hit: true,
+    };
+}
+
+pub fn is_on_ground(
+    origin: Vec3,
+    collider: &Collider,
+    max_slide_angle: f32,
+    spatial_query: &SpatialQuery,
+    filter: &SpatialQueryFilter,
+) -> bool {
+    if let Some(hit) = spatial_query.cast_shape(
+        collider,
+        origin,
+        Quat::IDENTITY, // TODO: Support rotation?
+        Dir3::NEG_Y,
+        0.1,
+        true,
+        filter.clone(),
+    ) {
+        hit.normal1.angle_between(Vec3::Y) < max_slide_angle
+    } else {
+        false
+    }
 }

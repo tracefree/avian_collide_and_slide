@@ -1,7 +1,7 @@
 use std::f32::consts::PI;
 
 use avian3d::prelude::*;
-use avian_collide_and_slide::{collide_and_slide, CollideAndSlideConfig};
+use avian_collide_and_slide::{collide_and_slide, is_on_ground, CollideAndSlideConfig};
 use bevy::prelude::*;
 
 use crate::{
@@ -14,7 +14,15 @@ pub(super) fn plugin(app: &mut App) {
     app.add_systems(Update, apply_rotation.in_set(AppSet::Update));
     app.add_systems(
         FixedUpdate,
-        (apply_movement, apply_damping).in_set(AppSet::Update),
+        (
+            update_grounded,
+            apply_movement,
+            apply_gravity,
+            apply_damping,
+        )
+            .after(PhysicsSet::Sync)
+            .chain()
+            .in_set(AppSet::Update),
     );
 }
 
@@ -32,10 +40,10 @@ impl Default for KinematicCharacterController {
     fn default() -> Self {
         Self {
             max_speed: 10.0,
-            acceleration: 30.0,
+            acceleration: 10.0,
             grounded: false,
             velocity: Vec3::ZERO,
-            jump_impulse: 5.0,
+            jump_impulse: 10.0,
             collide_and_slide_config: CollideAndSlideConfig {
                 up_direction: Dir3::Y,
                 max_slope_angle: PI / 4.0,
@@ -71,7 +79,8 @@ fn apply_movement(
     mut q_controllers: Query<(
         Entity,
         &mut KinematicCharacterController,
-        &mut Transform,
+        // &mut Transform,
+        &mut Position,
         &Rotation,
         &Collider,
     )>,
@@ -79,7 +88,7 @@ fn apply_movement(
     time: Res<Time>,
     spatial_query: SpatialQuery,
 ) {
-    for (entity, mut controller, mut transform, rotation, collider) in q_controllers.iter_mut() {
+    for (entity, mut controller, mut position, rotation, collider) in q_controllers.iter_mut() {
         let motion = rotation.mul_vec3(Vec3::new(
             input.direction.x * controller.acceleration,
             0.0,
@@ -88,31 +97,24 @@ fn apply_movement(
             * controller.acceleration;
 
         controller.velocity += motion;
-        //controller.velocity.y -= 9.8 * time.delta_seconds();
 
         let sprint_modifier = if input.sprint { 1.5 } else { 1.0 };
-
-        if controller.velocity.with_y(0.0).length() >= controller.max_speed * sprint_modifier {
-            let clamped_horizontal_velocity = controller.velocity.with_y(0.0).normalize()
-                * controller.max_speed
-                * sprint_modifier;
-            controller.velocity = clamped_horizontal_velocity.with_y(controller.velocity.y);
-        }
 
         if input.jump && controller.grounded {
             controller.velocity.y = controller.jump_impulse;
         }
 
         let new_motion = collide_and_slide(
-            transform.translation,
+            position.0,
             controller.velocity * time.delta_seconds(),
             collider,
             &controller.collide_and_slide_config,
             &spatial_query,
             &SpatialQueryFilter::from_excluded_entities([entity]),
-        );
+        )
+        .slide_target;
 
-        transform.translation += new_motion;
+        //position.0 += new_motion;
     }
 }
 
@@ -120,5 +122,47 @@ fn apply_damping(mut q_controllers: Query<&mut KinematicCharacterController>) {
     for mut controller in &mut q_controllers {
         controller.velocity.x *= 0.9;
         controller.velocity.z *= 0.9;
+    }
+}
+
+fn update_grounded(
+    mut q_controllers: Query<(
+        Entity,
+        &mut KinematicCharacterController,
+        &Transform,
+        &Collider,
+    )>,
+    spatial_query: SpatialQuery,
+) {
+    for (entity, mut controller, transform, collider) in &mut q_controllers {
+        controller.grounded = is_on_ground(
+            transform.translation,
+            collider,
+            controller.collide_and_slide_config.max_slope_angle,
+            &spatial_query,
+            &SpatialQueryFilter::from_excluded_entities([entity]),
+        );
+        println!("{}", controller.grounded);
+    }
+}
+
+fn apply_gravity(
+    mut q_controllers: Query<(
+        Entity,
+        &mut KinematicCharacterController,
+        &mut Transform,
+        &Collider,
+    )>,
+    time: Res<Time>,
+    spatial_query: SpatialQuery,
+) {
+    for (entity, mut controller, mut transform, collider) in &mut q_controllers {
+        if !controller.grounded {
+            controller.velocity.y -= 9.8 * time.delta_seconds();
+        } else {
+            controller.velocity.y = 0.0;
+        }
+
+        println!("{}", controller.velocity.y);
     }
 }
