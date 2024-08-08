@@ -23,18 +23,17 @@ fn spawn_player(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
-    println!("Spawning player");
     commands
         .spawn(MaterialMeshBundle {
             material: materials.add(StandardMaterial::from_color(Color::WHITE)),
             mesh: meshes.add(Capsule3d::new(0.3, 1.0)),
-            transform: Transform::from_xyz(0.0, 0.8, 0.0),
+            transform: Transform::from_xyz(0.0, 0.9, 0.0),
             ..default()
         })
         .insert(Name::new("Player"))
         .insert(KinematicCharacterController::default())
         .insert(RigidBody::Kinematic)
-        .insert(Collider::capsule(0.3, 1.0))
+        .insert(Collider::capsule(0.3 - 0.05, 1.0)) // Shrink by skin width
         .with_children(|player| {
             player
                 .spawn(CameraPivot)

@@ -5,6 +5,9 @@ edition = "2021"
 authors = ["tracefree"]
 license = "MIT OR Apache-2.0"
 description = "Experimental implementation of the collide-and-slide algorithm for Avian."
+readme = "README.md"
+repository = "https://github.com/tracefree/avian_collide_and_slide"
+keywords = ["gamedev", "physics"]
 
 [dependencies]
 avian3d = "0.1.1"

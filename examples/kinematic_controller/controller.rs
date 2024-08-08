@@ -12,23 +12,25 @@ use crate::{
 
 pub(super) fn plugin(app: &mut App) {
     app.add_systems(Update, apply_rotation.in_set(AppSet::Update));
+
+    // Todo: What is the correct schedule and system ordering for this?
     app.add_systems(
-        FixedUpdate,
+        FixedPostUpdate,
         (
             update_grounded,
-            apply_movement,
             apply_gravity,
+            apply_movement,
             apply_damping,
         )
-            .after(PhysicsSet::Sync)
             .chain()
-            .in_set(AppSet::Update),
+            .before(PhysicsSet::Sync)
+            .before(TransformSystem::TransformPropagate), // .in_set(AppSet::Update),
     );
 }
 
 #[derive(Component)]
 pub struct KinematicCharacterController {
-    pub max_speed: f32,
+    pub _max_speed: f32,
     pub acceleration: f32,
     pub grounded: bool,
     pub velocity: Vec3,
@@ -39,15 +41,15 @@ pub struct KinematicCharacterController {
 impl Default for KinematicCharacterController {
     fn default() -> Self {
         Self {
-            max_speed: 10.0,
+            _max_speed: 10.0,
             acceleration: 10.0,
             grounded: false,
             velocity: Vec3::ZERO,
-            jump_impulse: 10.0,
+            jump_impulse: 5.0,
             collide_and_slide_config: CollideAndSlideConfig {
                 up_direction: Dir3::Y,
                 max_slope_angle: PI / 4.0,
-                floor_snap_length: 0.1,
+                floor_snap_length: 0.15,
                 constant_speed: false,
                 skin_width: 0.05,
                 max_bounces: 4,
@@ -79,8 +81,7 @@ fn apply_movement(
     mut q_controllers: Query<(
         Entity,
         &mut KinematicCharacterController,
-        // &mut Transform,
-        &mut Position,
+        &mut Transform,
         &Rotation,
         &Collider,
     )>,
@@ -88,7 +89,7 @@ fn apply_movement(
     time: Res<Time>,
     spatial_query: SpatialQuery,
 ) {
-    for (entity, mut controller, mut position, rotation, collider) in q_controllers.iter_mut() {
+    for (entity, mut controller, mut transform, rotation, collider) in q_controllers.iter_mut() {
         let motion = rotation.mul_vec3(Vec3::new(
             input.direction.x * controller.acceleration,
             0.0,
@@ -98,23 +99,24 @@ fn apply_movement(
 
         controller.velocity += motion;
 
-        let sprint_modifier = if input.sprint { 1.5 } else { 1.0 };
+        // let sprint_modifier = if input.sprint { 1.5 } else { 1.0 };
 
         if input.jump && controller.grounded {
             controller.velocity.y = controller.jump_impulse;
         }
 
         let new_motion = collide_and_slide(
-            position.0,
+            transform.translation,
             controller.velocity * time.delta_seconds(),
             collider,
+            controller.grounded,
             &controller.collide_and_slide_config,
             &spatial_query,
             &SpatialQueryFilter::from_excluded_entities([entity]),
         )
         .slide_target;
 
-        //position.0 += new_motion;
+        transform.translation += new_motion;
     }
 }
 
@@ -142,27 +144,15 @@ fn update_grounded(
             &spatial_query,
             &SpatialQueryFilter::from_excluded_entities([entity]),
         );
-        println!("{}", controller.grounded);
     }
 }
 
-fn apply_gravity(
-    mut q_controllers: Query<(
-        Entity,
-        &mut KinematicCharacterController,
-        &mut Transform,
-        &Collider,
-    )>,
-    time: Res<Time>,
-    spatial_query: SpatialQuery,
-) {
-    for (entity, mut controller, mut transform, collider) in &mut q_controllers {
+fn apply_gravity(mut q_controllers: Query<&mut KinematicCharacterController>, time: Res<Time>) {
+    for mut controller in &mut q_controllers {
         if !controller.grounded {
             controller.velocity.y -= 9.8 * time.delta_seconds();
         } else {
             controller.velocity.y = 0.0;
         }
-
-        println!("{}", controller.velocity.y);
     }
 }

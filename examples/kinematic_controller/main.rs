@@ -3,7 +3,6 @@ use bevy::{
     prelude::*,
     window::{CursorGrabMode, PrimaryWindow, WindowResolution},
 };
-use bevy_inspector_egui::quick::WorldInspectorPlugin;
 use level::SpawnLevel;
 use player::SpawnPlayer;
 
@@ -37,7 +36,6 @@ fn main() {
 
     app.add_plugins(PhysicsPlugins::default());
     app.add_plugins(PhysicsDebugPlugin::default());
-    app.add_plugins(WorldInspectorPlugin::default());
 
     app.add_plugins((
         level::plugin,
