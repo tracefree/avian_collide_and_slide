@@ -2,7 +2,7 @@ use std::f32::consts::PI;
 
 use avian3d::prelude::*;
 use avian_collide_and_slide::{collide_and_slide, CollideAndSlideConfig};
-use bevy::{math::VectorSpace, prelude::*};
+use bevy::prelude::*;
 
 use crate::{
     input::{AccumulatedMouseMotion, PlayerInput},

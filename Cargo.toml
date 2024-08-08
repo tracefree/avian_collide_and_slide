@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2021"
 authors = ["tracefree"]
 license = "MIT OR Apache-2.0"
+description = "Experimental implementation of the collide-and-slide algorithm for Avian."
 
 [dependencies]
 avian3d = "0.1.1"
