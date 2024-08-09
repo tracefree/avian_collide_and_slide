@@ -90,25 +90,29 @@ fn apply_movement(
     spatial_query: SpatialQuery,
 ) {
     for (entity, mut controller, mut transform, rotation, collider) in q_controllers.iter_mut() {
+        // Construct desired motion vector from player input
+        // Horizontal motion
         let motion = rotation.mul_vec3(Vec3::new(
             input.direction.x * controller.acceleration,
             0.0,
             -input.direction.y * controller.acceleration,
         )) * time.delta_seconds()
             * controller.acceleration;
-
         controller.velocity += motion;
 
-        // let sprint_modifier = if input.sprint { 1.5 } else { 1.0 };
-
+        // Jump
         if input.jump && controller.grounded {
             controller.velocity.y = controller.jump_impulse;
         }
 
+        // Collision resolution. Split into horizontal and vertical motion passes to make it easier to overcome small obstacles.
+        // Has no impact on performance, the two passes have fewer bounces than one combined pass would have.
         let filter = &SpatialQueryFilter::from_excluded_entities([entity]);
+
+        // - Horizontal pass
         let mut new_motion = collide_and_slide(
             transform.translation,
-            controller.velocity * time.delta_seconds(),
+            controller.velocity.with_y(0.0) * time.delta_seconds(),
             collider,
             &controller.collide_and_slide_config,
             &spatial_query,
@@ -116,6 +120,18 @@ fn apply_movement(
         )
         .slide_target;
 
+        // - Gravity pass
+        new_motion += collide_and_slide(
+            transform.translation + new_motion,
+            controller.velocity.with_x(0.0).with_z(0.0) * time.delta_seconds(),
+            collider,
+            &controller.collide_and_slide_config,
+            &spatial_query,
+            &filter,
+        )
+        .slide_target;
+
+        // Snap to floor
         if controller.grounded
             && controller.velocity.y <= 0.0
             && controller.collide_and_slide_config.floor_snap_length > 0.0
@@ -132,6 +148,7 @@ fn apply_movement(
             new_motion += snap_motion;
         }
 
+        // Apply new position
         transform.translation += new_motion;
     }
 }
