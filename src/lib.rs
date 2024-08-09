@@ -24,10 +24,7 @@ pub fn collide_and_slide(
     spatial_query: &SpatialQuery,
     filter: &SpatialQueryFilter,
 ) -> CollideAndSlideResult {
-    let direction_result = Dir3::new(motion);
-    let mut distance = motion.length();
-
-    let mut direction = if let Ok(start_direction) = direction_result {
+    let mut direction = if let Ok(start_direction) = Dir3::new(motion) {
         start_direction
     } else {
         return CollideAndSlideResult {
@@ -35,13 +32,15 @@ pub fn collide_and_slide(
             obstacle_hit: false,
         };
     };
+    let mut distance = motion.length();
 
     let mut num_planes = 0;
     let mut planes = vec![Vec3::ZERO; config.max_clip_planes];
 
+    // The new motion vector that we return in the end
     let mut slide_target = Vec3::ZERO;
 
-    'bounce_loop: for _ in 0..config.max_clip_planes {
+    'bounce_loop: for _ in 0..config.max_bounces {
         if let Some(hit) = spatial_query.cast_shape(
             collider,
             origin,
@@ -52,20 +51,23 @@ pub fn collide_and_slide(
             filter.clone(),
         ) {
             if hit.time_of_impact >= distance {
+                // Obstacle only appears in the skin width margin, move as far as allowed.
+                // (TODO: This does not keep the body at a skin's distance when hitting obstacle at an angle)
                 slide_target += direction * (hit.time_of_impact - config.skin_width).max(0.0);
-                break;
+                break 'bounce_loop;
             }
 
+            // Move as close obstacle as we can.
             slide_target += direction * (hit.time_of_impact - config.skin_width);
 
-            // If we move above a threshold, consider previous planes as no longer active obstacles.
+            // If we moved above a threshold, consider previous planes as no longer active obstacles.
             if (hit.time_of_impact - config.skin_width).abs() > 0.01 {
                 num_planes = 0;
             }
 
             // Too many obstacles, let's give up.
             if num_planes >= config.max_clip_planes {
-                break;
+                break 'bounce_loop;
             }
 
             // Add the obstacle we hit to the sliding planes.
@@ -99,18 +101,20 @@ pub fn collide_and_slide(
 
             // Avoid moving backwards
             if projected_velocity.dot(motion) <= 0.0 {
-                break;
+                break 'bounce_loop;
             }
 
+            // Set up the next iteration of the bounce loop if the projected motion is normalizable
             direction = if let Ok(new_direction) = Dir3::new(projected_velocity) {
                 new_direction
             } else {
-                break;
+                break 'bounce_loop;
             };
             distance = projected_velocity.length();
         } else {
+            // No obstacles, move the entire distance
             slide_target += direction * distance;
-            break;
+            break 'bounce_loop;
         }
     }
 

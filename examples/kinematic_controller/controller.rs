@@ -52,8 +52,8 @@ impl Default for KinematicCharacterController {
                 floor_snap_length: 0.4,
                 constant_speed: false,
                 skin_width: 0.05,
-                max_bounces: 4,
-                max_clip_planes: 5,
+                max_bounces: 6,
+                max_clip_planes: 7,
             },
         }
     }
