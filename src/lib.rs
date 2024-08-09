@@ -20,7 +20,6 @@ pub fn collide_and_slide(
     origin: Vec3,
     motion: Vec3,
     collider: &Collider,
-    grounded: bool,
     config: &CollideAndSlideConfig,
     spatial_query: &SpatialQuery,
     filter: &SpatialQueryFilter,
@@ -115,30 +114,37 @@ pub fn collide_and_slide(
         }
     }
 
-    // Floor snapping
-    if config.floor_snap_length > 0.0 && motion.y <= 0.0 && grounded {
-        if let Some(hit) = spatial_query.cast_shape(
-            collider,
-            origin + slide_target,
-            Quat::IDENTITY,
-            Dir3::NEG_Y,
-            config.floor_snap_length + config.skin_width,
-            true,
-            filter.clone(),
-        ) {
-            if hit.time_of_impact > config.skin_width {
-                slide_target.y -= hit.time_of_impact - config.skin_width;
-            }
-        }
-    }
-
     return CollideAndSlideResult {
         slide_target,
         obstacle_hit: true,
     };
 }
 
-pub fn is_on_ground(
+pub fn snap_to_floor(
+    origin: Vec3,
+    collider: &Collider,
+    floor_snap_length: f32,
+    _max_slide_angle: f32,
+    spatial_query: &SpatialQuery,
+    filter: &SpatialQueryFilter,
+) -> Vec3 {
+    if let Some(hit) = spatial_query.cast_shape(
+        collider,
+        origin,
+        Quat::IDENTITY, // TODO: Support rotation?
+        Dir3::NEG_Y,
+        floor_snap_length + 0.05, // TODO: Don't hardcode this value
+        true,
+        filter.clone(),
+    ) {
+        return (hit.time_of_impact - 0.05 * hit.normal2.angle_between(Vec3::NEG_Y).cos())
+            * Vec3::NEG_Y;
+    }
+
+    Vec3::ZERO
+}
+
+pub fn is_on_floor(
     origin: Vec3,
     collider: &Collider,
     max_slide_angle: f32,
@@ -150,7 +156,7 @@ pub fn is_on_ground(
         origin,
         Quat::IDENTITY, // TODO: Support rotation?
         Dir3::NEG_Y,
-        0.1, // TODO: Don't hardcode this value
+        0.2, // TODO: Don't hardcode this value
         true,
         filter.clone(),
     ) {

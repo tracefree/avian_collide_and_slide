@@ -23,9 +23,13 @@ fn spawn_player(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
+    let mut material = StandardMaterial::from_color(Color::WHITE);
+    material.alpha_mode = AlphaMode::Blend;
+    material.base_color = Color::srgba(1.0, 1.0, 1.0, 0.9);
+
     commands
         .spawn(MaterialMeshBundle {
-            material: materials.add(StandardMaterial::from_color(Color::WHITE)),
+            material: materials.add(material),
             mesh: meshes.add(Capsule3d::new(0.3, 1.0)),
             transform: Transform::from_xyz(0.0, 0.9, 0.0),
             ..default()

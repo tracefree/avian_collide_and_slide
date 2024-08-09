@@ -1,7 +1,7 @@
-use std::f32::consts::PI;
-
 use avian3d::prelude::*;
-use avian_collide_and_slide::{collide_and_slide, is_on_ground, CollideAndSlideConfig};
+use avian_collide_and_slide::{
+    collide_and_slide, is_on_floor, snap_to_floor, CollideAndSlideConfig,
+};
 use bevy::prelude::*;
 
 use crate::{
@@ -42,14 +42,14 @@ impl Default for KinematicCharacterController {
     fn default() -> Self {
         Self {
             _max_speed: 10.0,
-            acceleration: 10.0,
+            acceleration: 8.0,
             grounded: false,
             velocity: Vec3::ZERO,
             jump_impulse: 5.0,
             collide_and_slide_config: CollideAndSlideConfig {
                 up_direction: Dir3::Y,
-                max_slope_angle: PI / 4.0,
-                floor_snap_length: 0.15,
+                max_slope_angle: 45.0_f32.to_radians(),
+                floor_snap_length: 0.4,
                 constant_speed: false,
                 skin_width: 0.05,
                 max_bounces: 4,
@@ -105,16 +105,32 @@ fn apply_movement(
             controller.velocity.y = controller.jump_impulse;
         }
 
-        let new_motion = collide_and_slide(
+        let filter = &SpatialQueryFilter::from_excluded_entities([entity]);
+        let mut new_motion = collide_and_slide(
             transform.translation,
             controller.velocity * time.delta_seconds(),
             collider,
-            controller.grounded,
             &controller.collide_and_slide_config,
             &spatial_query,
-            &SpatialQueryFilter::from_excluded_entities([entity]),
+            &filter,
         )
         .slide_target;
+
+        if controller.grounded
+            && controller.velocity.y <= 0.0
+            && controller.collide_and_slide_config.floor_snap_length > 0.0
+        {
+            let snap_motion = snap_to_floor(
+                transform.translation + new_motion,
+                collider,
+                controller.collide_and_slide_config.floor_snap_length,
+                controller.collide_and_slide_config.max_slope_angle,
+                &spatial_query,
+                &filter,
+            );
+
+            new_motion += snap_motion;
+        }
 
         transform.translation += new_motion;
     }
@@ -137,7 +153,7 @@ fn update_grounded(
     spatial_query: SpatialQuery,
 ) {
     for (entity, mut controller, transform, collider) in &mut q_controllers {
-        controller.grounded = is_on_ground(
+        controller.grounded = is_on_floor(
             transform.translation,
             collider,
             controller.collide_and_slide_config.max_slope_angle,
